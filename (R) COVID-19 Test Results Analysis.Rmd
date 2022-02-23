@@ -1,0 +1,130 @@
+---
+title: "COVID-19 Test Results Analysis"
+author: "Salvatore Porcheddu"
+date: "20 11 2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# COVID-19 Test Results Analysis
+
+This project aims to analyse COVID-19 test results in order to answer the following question: **Which countries have had the highest number of positive causes in comparison to the number of performed tests?**
+
+The data that we will use for the analysis comes from a dataset collected between the 20th of January and the 1st of June 2020 that can be found, in its original version, [here](https://www.kaggle.com/lin0li/covid19testing).
+
+First of all, let's load the dataset as a dataframe and analyse its rows and columns:
+
+```{r library(readr)}
+library(tidyverse)
+covid_df <- read_csv("covid19.csv")
+dim(covid_df)
+vector_cols <- colnames(covid_df)
+vector_cols
+```
+As we can see, the dataset has 10,903 rows and 14 columns: most of the columns contain numeric data about tested and positive patients (measured daily and cumulative), as well as hospitalizations, recoveries and deaths. We also have character columns that describe the geographical area to which the data pertains (province/state, country, continent) and a column for the dates.
+
+Let's see a few complete rows and a summary:
+
+```{r covid_df}
+covid_df %>% head
+covid_df %>% glimpse
+```
+
+The ``Province_State`` column mixes local and state-wide data: this is not good for the purposes of our analysis, as we only want to work with state-wide information.
+
+To fix this, we must filter out the local data and only retain the national figures. We will also remove the column ``Province_State`` altogether, as we will not really need it from now on.
+
+```{r filter}
+covid_df %>% select(Province_State) %>% unique
+
+covid_df_all_states <- covid_df %>% filter(Province_State == "All States") %>% select(-Province_State)
+covid_df_all_states %>% glimpse
+```
+Next, we will further filter our selection by removing any column that refers to cumulative data. We will instead only consider the columns that contain daily data.
+
+```{r further selection}
+
+covid_df_all_states_daily <- covid_df_all_states %>% select(Date, Country_Region, active, hospitalizedCurr, daily_tested, daily_positive)
+
+covid_df_all_states_daily %>% head
+
+```
+
+Now that we have filtered our dataset, it's time to work with it to extract some useful information that will help us answer our initial question.
+
+In particular, we now want to determine the overall number of number of positive, tested, hospitalized and active cases for each country, which we will use later on. Of all these countries, we will then extract the ten that have the largest number of cases. 
+
+```{r group, arrange and summarize}
+
+covid_df_all_states_daily_sum <- covid_df_all_states_daily %>% group_by(Country_Region) %>% summarize(tested = sum(daily_tested), positive = sum(daily_positive), active = sum(active), hospitalized = sum(hospitalizedCurr)) %>% arrange(desc(tested))
+
+# let's see this new dataframe
+covid_df_all_states_daily_sum
+
+# finally, let's extract the ten countries with the most cases
+covid_top_10 <- covid_df_all_states_daily_sum %>% head(10)
+```
+We can now answer our original question: **which countries have had the largest number of positive cases in comparison to the number of tests they performed?**
+
+```{r vector creation}
+
+countries <- covid_top_10$Country_Region
+tested_cases <- covid_top_10$tested
+positive_cases <- covid_top_10$positive
+active_cases <- covid_top_10$active
+hospitalized_cases <- covid_top_10$hospitalized
+
+# let's give a name to our newly created vectors
+names(tested_cases) <- countries
+names(positive_cases) <- countries
+names(active_cases) <- countries
+names(hospitalized_cases) <- countries
+
+# what are the top 3 positive against tested cases?
+positive_tested <- positive_cases / tested_cases
+positive_tested_top_3 <- positive_tested[c("United Kingdom", "United States", "Turkey")]
+positive_tested_top_3
+```
+
+**The United Kingdom, the United States and Turkey have the highest number of positive cases against the number of tests.**
+
+Now, let's create a matrix containing all of the relevant information we have collected about these 3 countries.
+
+```{r creating matrix}
+
+united_kingdom <- c(0.11, 1473672, 166909, 0, 0)
+united_states <- c(0.10, 17282363, 1877179, 0, 0)
+turkey <- c(0.08, 2031192, 163941, 2980960, 0)
+
+covid_mat <- rbind(united_kingdom, united_states, turkey)
+
+colnames(covid_mat) <- c("Ratio", "tested", "positive", "active", "hospitalized")
+
+covid_mat
+```
+
+To wrap up this project, let's now store all of the information we produced in a few lists.
+
+```{r lists}
+
+question <- "Which countries have had the highest number of positive cases against the number of tests?"
+answer <- c("Positive tested cases" = positive_tested_top_3)
+
+dataframes <- list(covid_df, covid_df_all_states, covid_df_all_states_daily, covid_df_all_states_daily_sum)
+matrices <- list(covid_mat)
+vectors <- list(countries, tested_cases, positive_cases, active_cases, hospitalized_cases)
+
+data_structure_list <- list(dataframes = dataframes, matrices = matrices, vectors = vectors)
+
+covid_analysis_list <- list(question, answer, data_structure_list)
+covid_analysis_list[2]
+```
+
+**Conclusion**: in this project we have ascertained that the United States, Russia, Italy, India, Turkey, Canada, the United Kingdom, Australia, Peru and Poland are the ten countries which have conducted more Covid-19 tests.
+
+Of these countries, the three with the highest positive cases to tests performed ratio are the United Kingdom (11%), the United States (10%), and Turkey (8%).
